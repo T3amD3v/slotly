@@ -2,16 +2,5 @@
   "version": 2,
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "framework": "nextjs",
-  "headers": [
-    {
-      "source": "/api/auth/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
-      ]
-    }
-  ],
-  "rewrites": [
-    { "source": "/api/auth/:path*", "destination": "/api/auth/:path*" }
-  ]
+  "framework": "nextjs"
 } 

@@ -135,7 +135,7 @@ const handler = NextAuth({
         sameSite: "strict", // More restrictive than lax for better security
         path: "/",
         maxAge: 30 * 24 * 60 * 60, // 30 days
-        domain: process.env.NODE_ENV === 'production' ? ".teamodea.com" : undefined, // Domain for production
+        domain: process.env.NODE_ENV === 'production' ? undefined : undefined, // Let the browser set the domain automatically
       },
     },
     callbackUrl: {
