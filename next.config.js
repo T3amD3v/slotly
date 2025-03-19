@@ -17,11 +17,10 @@ const nextConfig = {
   
   rewrites: async () => {
     return [
-      // Ensure NextAuth routes are properly handled
-      {
-        source: '/api/auth/:path*',
-        destination: '/api/auth/:path*',
-      },
+      // Important: NextAuth routes are handled by Next.js API routes in app/api/auth/
+      // These should NOT be rewritten to FastAPI backend
+      
+      // FastAPI routes
       {
         source: "/api/py/:path*",
         destination:
