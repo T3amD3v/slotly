@@ -249,7 +249,7 @@ const SchedulingForm: React.FC<SchedulingFormProps> = ({ onSubmit, initialPartic
           <h2 className="text-xl font-semibold">Find Availability</h2>
         </div>
         <p className="text-gray-300 mt-1 text-sm">
-          Identify optimal meeting times across all participants' schedules
+          Identify optimal meeting times across all participants&apos; schedules
         </p>
       </div>
 
