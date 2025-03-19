@@ -4,7 +4,7 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "functions": {
-    "app/api/auth/[...nextauth]/route.ts": {
+    "app/api/auth/**": {
       "maxDuration": 30
     }
   },
