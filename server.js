@@ -13,6 +13,14 @@ app.prepare().then(() => {
     // Ensure auth routes are properly handled
     if (parsedUrl.pathname.startsWith('/api/auth')) {
       console.log('Auth route requested:', parsedUrl.pathname)
+      
+      // Set appropriate headers for auth routes
+      res.setHeader('Cache-Control', 'no-store, max-age=0')
+      
+      // If this is a session or callback endpoint, ensure content type is correct
+      if (parsedUrl.pathname.includes('/session') || parsedUrl.pathname.includes('/callback')) {
+        res.setHeader('Content-Type', 'application/json')
+      }
     }
     
     handle(req, res, parsedUrl)

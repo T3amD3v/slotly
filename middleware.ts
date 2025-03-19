@@ -62,9 +62,10 @@ export async function middleware(request: NextRequest) {
  * - Next.js image optimization files (_next/image)
  * - Favicon
  * - Public assets in the public directory
+ * - API auth routes (to avoid interfering with NextAuth)
  */
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public/|api/auth/).*)',
   ],
 } 

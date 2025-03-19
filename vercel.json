@@ -1,6 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "buildCommand": "rm -rf .next && npm run build",
   "installCommand": "npm install",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "routes": [
+    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1" }
+  ]
 } 
