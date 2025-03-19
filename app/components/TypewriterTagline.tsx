@@ -4,7 +4,7 @@ import { TypewriterEffectSmooth } from "../ui/typewriter-effect";
 export function TypewriterTagline() {
   const words = [
     {
-      text: "Meetings Suck—Scheduling Shouldn&apos;t.",
+      text: "Meetings Suck—Scheduling Shouldn't.",
       className: "text-white",
     },
   ];
