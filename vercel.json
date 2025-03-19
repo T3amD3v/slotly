@@ -3,11 +3,6 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "functions": {
-    "app/api/auth/**": {
-      "maxDuration": 30
-    }
-  },
   "headers": [
     {
       "source": "/api/auth/(.*)",
@@ -15,5 +10,8 @@
         { "key": "Cache-Control", "value": "no-store, max-age=0" }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/api/auth/:path*", "destination": "/api/auth/:path*" }
   ]
 } 
