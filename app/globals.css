@@ -2,26 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --background: 0 0% 10%;
+    --foreground: 0 0% 95%;
+
+    --card: 240 3.7% 15.9%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 240 5.9% 10%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 240 4.8% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 4.8% 15.9%;
+    --accent-foreground: 0 0% 95%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 20%;
+    --input: 240 5.9% 20%;
+    --ring: 240 10% 3.9%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+@layer base {
+  * {
+    @apply border-[color:var(--border)];
+  }
+  body {
+    @apply bg-[rgb(26,26,26)] text-[color:var(--foreground)];
+    margin: 0;
+    padding: 0;
+  }
 }
+
+/* Glow pulse animation */
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 30px 10px rgba(30,40,117,0.5), 0 0 50px 15px rgba(30,40,117,0.3);
+  }
+  50% {
+    box-shadow: 0 0 50px 20px rgba(30,40,117,0.7), 0 0 80px 30px rgba(30,40,117,0.5), 0 0 100px 40px rgba(30,40,117,0.3);
+  }
+  100% {
+    box-shadow: 0 0 30px 10px rgba(30,40,117,0.5), 0 0 50px 15px rgba(30,40,117,0.3);
+  }
+}
+
+.glow-effect {
+  animation: glowPulse 4s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+

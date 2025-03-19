@@ -1,121 +1,236 @@
-import Image from "next/image";
-import Link from "next/link";
+'use client';
 
+import { useState, useEffect } from "react";
+// @ts-ignore
+import { useSession, signIn, signOut } from "next-auth/react";
+import Link from "next/link";
+// @ts-ignore
+import SchedulingForm from "./components/SchedulingForm";
+// @ts-ignore
+import AvailabilityResults from "./components/AvailabilityResults";
+import { useRouter } from "next/navigation";
+
+/**
+ * FormData interface defines the structure of data collected from the scheduling form
+ * meeting_type: Determines whether we're finding availability or scheduling a specific meeting
+ * participants: List of email addresses for calendar availability checking
+ * duration: Length of the meeting in minutes
+ * date_range: Start and end dates to check for availability
+ */
+interface FormData {
+  meeting_type: 'find_availability' | 'schedule_meeting';
+  participants: string[];
+  duration: number;
+  date_range: {
+    start: string;
+    end: string;
+  };
+}
+
+/**
+ * Home Component - Main application page
+ * 
+ * This component handles:
+ * 1. Authentication state management
+ * 2. Form submission for scheduling
+ * 3. Display of scheduling form or availability results
+ * 4. Event listening for meeting scheduling events
+ */
 export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing FastApi API&nbsp;
-          <Link href="/api/py/helloFastApi">
-            <code className="font-mono font-bold">api/index.py</code>
-          </Link>
-        </p>
-        <p className="fixed right-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing Next.js API&nbsp;
-          <Link href="/api/helloNextJs">
-            <code className="font-mono font-bold">app/api/helloNextJs</code>
-          </Link>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+  // Authentication state from NextAuth
+  const { data: session, status } = useSession();
+  // State for storing availability results returned from API
+  const [availabilityResults, setAvailabilityResults] = useState<any>(null);
+  // State for storing participants between form submissions
+  const [savedParticipants, setSavedParticipants] = useState<string[]>([]);
+  const router = useRouter();
+
+  /**
+   * Effect hook to verify authentication
+   * Redirects to sign-in page if no session is found
+   */
+  useEffect(() => {
+    const checkSession = async () => {
+      const response = await fetch('/api/auth/session');
+      const data = await response.json();
+      
+      // If the session check fails and we're not already loading, redirect to sign-in
+      if (!data.user && status !== 'loading') {
+        router.push('/auth/signin');
+      }
+    };
+    
+    checkSession();
+  }, [router, status]);
+
+  /**
+   * Effect hook to listen for meeting scheduled events 
+   * Used for communication from child components
+   */
+  useEffect(() => {
+    const handleMeetingScheduled = (event: any) => {
+      setAvailabilityResults(event.detail);
+    };
+
+    window.addEventListener('meetingScheduled', handleMeetingScheduled);
+    
+    return () => {
+      window.removeEventListener('meetingScheduled', handleMeetingScheduled);
+    };
+  }, []);
+
+  /**
+   * Loading state UI while session is being checked
+   */
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-24 bg-[rgb(26,26,26)]">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-gray-300">Loading session...</p>
+      </div>
+    );
+  }
+
+  /**
+   * UI for unauthenticated users - sign in prompt
+   */
+  if (!session) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-24 bg-[rgb(26,26,26)]">
+        <div className="w-full max-w-md p-8 space-y-8 bg-[#1a1b1e] rounded-xl shadow-md glow-effect">
+          <div className="text-center">
+            <div className="flex items-center justify-center">
+              <svg className="h-8 w-8 text-blue-500" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M8 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M3 10H21" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              <h1 className="text-3xl font-bold text-gray-100 ml-3">Slotly</h1>
+            </div>
+            <p className="mt-2 text-gray-300">Sign in to manage your calendar</p>
+          </div>
+          
+          <div className="mt-8">
+            <button
+              onClick={() => signIn("google", { 
+                callbackUrl: "/",
+                prompt: "consent"
+              })}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Sign in with Google
+            </button>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+  /**
+   * Handles form submission for scheduling
+   * 1. Gets participant data from form
+   * 2. Adds auth tokens from session
+   * 3. Submits to API
+   * 4. Updates state with results
+   * 
+   * @param formData - Form data containing scheduling information
+   */
+  const handleFormSubmit = async (formData: FormData) => {
+    try {
+      // Save the participants for later use
+      setSavedParticipants(formData.participants);
+      
+      // Add authentication info from session
+      const authData = {
+        ...formData,
+        auth: {
+          accessToken: session?.accessToken,
+          refreshToken: session?.refreshToken,
+        }
+      };
+      
+      const response = await fetch("/api/py/schedule", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(authData),
+        credentials: 'include', // Include cookies
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to process request: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Store the original participants in the availability results
+      // so they can be used when scheduling a meeting
+      setAvailabilityResults({
+        ...data,
+        participants: formData.participants
+      });
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+  /**
+   * Main UI for authenticated users
+   * Shows either:
+   * 1. Availability results if a search was performed
+   * 2. Scheduling form if no search has been performed yet
+   */
+  return (
+    <main className="flex min-h-screen flex-col items-center p-6 md:p-24 bg-[rgb(26,26,26)]">
+      <div className="w-full max-w-4xl">
+        <div className="flex justify-between items-center mb-10">
+          <div className="flex items-center">
+            <svg className="h-8 w-8 text-blue-500" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+              <path d="M16 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M8 2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M3 10H21" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            <h1 className="text-3xl font-bold text-gray-100 ml-3">Slotly</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="hidden md:block text-sm text-gray-300">
+              Signed in as {session.user?.email}
+            </div>
+            <button
+              onClick={() => signOut()}
+              className="px-4 py-2 text-sm font-medium text-gray-300 bg-[#25262b] rounded-md hover:bg-[#2c2d32]"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+        {availabilityResults ? (
+          <div>
+            <AvailabilityResults 
+              results={availabilityResults} 
+              onReset={(participants) => {
+                // If participants are passed, update the saved participants
+                if (participants) {
+                  setSavedParticipants(participants);
+                }
+                setAvailabilityResults(null);
+              }}
+            />
+          </div>
+        ) : (
+          <div>
+            <SchedulingForm 
+              onSubmit={handleFormSubmit} 
+              initialParticipants={savedParticipants}
+            />
+          </div>
+        )}
       </div>
     </main>
   );

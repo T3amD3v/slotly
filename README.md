@@ -74,7 +74,7 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-The FastApi server will be running on [http://127.0.0.1:8000](http://127.0.0.1:8000) – feel free to change the port in `package.json` (you'll also need to update it in `next.config.js`).
+The FastApi server will be running on [http://127.0.0.1:8000](http://127.0.0.1:8000) – feel free to change the port in `package.json` (you'll also need to update it in `next.config.js`).
 
 ## Learn More
 
@@ -85,3 +85,118 @@ To learn more about Next.js, take a look at the following resources:
 - [FastAPI Documentation](https://fastapi.tiangolo.com/) - learn about FastAPI features and API.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+
+# Google Calendar Automation
+# Slotly
+
+## Features
+
+- **Google Calendar Integration**: Connect securely with OAuth to access and manage calendar events
+- **Availability Finding**: Automatically find available time slots across multiple participants
+- **Meeting Scheduling**: Schedule meetings in available time slots
+- **Domain Restriction**: Default restriction to @teamodea.com email addresses, with configurable options for other domains
+- **Time Zone Handling**: All times are processed in Central Standard Time (CST) for consistency
+- **Secure Authentication**: Uses encrypted HTTP-only cookies for token storage
+
+## Tech Stack
+
+- **Frontend**: Next.js with React
+- **Backend**: FastAPI (Python)
+- **Authentication**: NextAuth.js with Google OAuth
+- **Styling**: Tailwind CSS
+- **Time Handling**: Date-fns (JavaScript) and pytz (Python)
+
+## Working Hours
+
+The application finds meeting slots within standard working hours:
+- 8:00 AM to 5:00 PM CST
+- Monday through Friday only
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- Python 3.9+
+- Google OAuth credentials (Client ID and Client Secret)
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/google-calendar-automation.git
+   cd google-calendar-automation
+   ```
+
+2. Install JavaScript dependencies:
+   ```
+   npm install
+   ```
+
+3. Install Python dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+4. Create a `.env.local` file based on `.env.local.example` and add your credentials:
+   ```
+   cp .env.local.example .env.local
+   ```
+
+5. Edit `.env.local` with your Google OAuth credentials and settings
+
+### Google OAuth Setup
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable the Google Calendar API
+4. Configure the OAuth consent screen
+5. Create OAuth client ID credentials
+6. Add authorized redirect URIs (e.g., http://localhost:3000/api/auth/callback/google for development)
+
+### Running the Application
+
+Start the development server:
+
+```
+npm run dev
+```
+
+This will start both the Next.js frontend and FastAPI backend.
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3000/api/py/
+- API Documentation: http://localhost:3000/docs
+
+## Deployment
+
+The application is designed to be deployed on Vercel:
+
+1. Create a new Vercel project
+2. Link to your repository
+3. Add environment variables in the Vercel dashboard
+4. Deploy
+
+### Production Configuration
+
+For production deployment, use the `.env.production` file as a template and make the following changes:
+
+1. Set `NEXTAUTH_URL` to your production domain (https required)
+2. Generate a new strong `NEXTAUTH_SECRET` value (never reuse development secrets)
+3. Use production Google OAuth credentials that match your domain
+4. Ensure `NODE_ENV` is set to `production`
+
+## Security Considerations
+
+- OAuth tokens are stored in encrypted HTTP-only cookies with the following security settings:
+  - `secure: true` - Only transmitted over HTTPS
+  - `sameSite: "strict"` - Prevents CSRF attacks
+  - Cookie names prefixed with `__Secure-` in production
+  - Domain restriction to `.teamodea.com` in production
+- Domain restrictions are enforced for participant emails (only teamodea.com)
+- CORS restrictions limit API access to only teamodea.com domains
+- HTTPS is enforced in production
+
+## License
+
+[MIT License](LICENSE)
