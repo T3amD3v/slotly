@@ -1,7 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable more debugging in production for authentication issues
+  reactStrictMode: true,
+  
+  // Prioritize NextAuth API routes
+  async headers() {
+    return [
+      {
+        source: '/api/auth/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, max-age=0' },
+        ],
+      },
+    ];
+  },
+  
   rewrites: async () => {
     return [
+      // Ensure NextAuth routes are properly handled
+      {
+        source: '/api/auth/:path*',
+        destination: '/api/auth/:path*',
+      },
       {
         source: "/api/py/:path*",
         destination:

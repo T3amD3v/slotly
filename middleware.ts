@@ -16,11 +16,15 @@ import { getToken } from 'next-auth/jwt'
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   
+  // Allow all NextAuth API routes to pass through without middleware processing
+  if (path.startsWith('/api/auth')) {
+    return NextResponse.next();
+  }
+  
   // Define public paths that don't require authentication
   const publicPaths = [
     '/auth/signin', 
-    '/auth/error', 
-    '/api/auth'
+    '/auth/error'
   ];
   
   // Check if the path is public by matching against our list of public paths
@@ -41,7 +45,7 @@ export async function middleware(request: NextRequest) {
   
   // Redirect authenticated users to home page if they try to access public pages
   // This prevents authenticated users from seeing the sign-in page
-  if (isPublicPath && token && !path.startsWith('/api/auth')) {
+  if (isPublicPath && token) {
     return NextResponse.redirect(new URL('/', request.url));
   }
   
@@ -57,11 +61,10 @@ export async function middleware(request: NextRequest) {
  * - Next.js static files (_next/static)
  * - Next.js image optimization files (_next/image)
  * - Favicon
- * - NextAuth API routes that handle authentication
  * - Public assets in the public directory
  */
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/auth/|public/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
   ],
 } 
