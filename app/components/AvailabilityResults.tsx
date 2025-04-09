@@ -55,7 +55,7 @@ interface AvailabilityResultsProps {
  */
 const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onReset }) => {
   const { data: session } = useSession();
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   const [meetingName, setMeetingName] = useState('');
   const [isScheduling, setIsScheduling] = useState(false);
   const [schedulingError, setSchedulingError] = useState<string | null>(null);
@@ -68,7 +68,14 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
    * @param slot - The selected time slot
    */
   const handleSelectSlot = (slot: TimeSlot) => {
-    setSelectedSlot(slot);
+    setSelectedSlots(prev => {
+      const isSelected = prev.some(s => s.start === slot.start);
+      if (isSelected) {
+        return prev.filter(s => s.start !== slot.start);
+      } else {
+        return [...prev, slot];
+      }
+    });
     setSchedulingError(null);
   };
 
@@ -91,7 +98,7 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
    * 5. Communicates back to parent component via custom event
    */
   const handleScheduleMeeting = async () => {
-    if (!selectedSlot) return;
+    if (selectedSlots.length === 0) return;
     if (!meetingName.trim()) {
       setSchedulingError('Please enter a meeting name');
       return;
@@ -104,78 +111,46 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
       // Get the participants from the original request that was used to find availability
       const participants = results.participants || [];
       
-      // Prepare data for scheduling
-      const scheduleData = {
-        meeting_type: 'schedule_meeting',
-        meeting_name: meetingName.trim(),
-        participants,
-        time_slot: selectedSlot,
-        // Include a default duration (in case it's needed by the backend)
-        duration: 60, // Default to 60 mins, can be calculated from time_slot if needed
-        // Include an empty date range to satisfy the API
-        date_range: {
-          start: selectedSlot.start,
-          end: selectedSlot.end
-        },
-        auth: {
-          accessToken: session?.accessToken,
-          refreshToken: session?.refreshToken,
-        },
-        add_google_meet: addGoogleMeet,
-      };
-      
-      const response = await fetch("/api/py/schedule", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(scheduleData),
-        credentials: 'include', // Include cookies
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to schedule meeting: ${errorText}`);
-      }
-      
-      const data = await response.json();
-      
-      // Update the results with the newly scheduled meeting
-      if (data.scheduled_meeting) {
-        // Don't refresh the page or reset the form
-        // Instead, update the parent component to show the scheduled meeting confirmation
-        // Call onReset which will set the state in the parent component
-        if (typeof onReset === 'function') {
-          // Create a new object that combines the current participants with the scheduled meeting data
-          const updatedResults = {
-            ...results,
-            scheduled_meeting: data.scheduled_meeting
-          };
-          
-          // Reset first to clear the view
-          onReset();
-          
-          // Small delay to ensure state is updated before showing the new result
-          setTimeout(() => {
-            // Use a hash to force a re-render without refreshing
-            window.location.hash = 'meeting-confirmed';
-            
-            // Then update with the new results that include the scheduled meeting
-            onReset(updatedResults.participants);
-            
-            // Manually call the parent setAvailabilityResults by dispatching a custom event
-            const event = new CustomEvent('meetingScheduled', { 
-              detail: updatedResults 
-            });
-            window.dispatchEvent(event);
-          }, 100);
+      // Schedule meetings for all selected slots
+      for (const slot of selectedSlots) {
+        // Prepare data for scheduling
+        const scheduleData = {
+          meeting_type: 'schedule_meeting',
+          meeting_name: meetingName.trim(),
+          participants,
+          time_slot: slot,
+          duration: 60, // Default to 60 mins, can be calculated from time_slot if needed
+          date_range: {
+            start: slot.start,
+            end: slot.end
+          },
+          auth: {
+            accessToken: session?.accessToken,
+            refreshToken: session?.refreshToken,
+          },
+          add_google_meet: addGoogleMeet,
+        };
+        
+        const response = await fetch("/api/py/schedule", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(scheduleData),
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to schedule meeting: ${errorText}`);
         }
-      } else {
-        throw new Error("No meeting was scheduled in the response");
       }
+      
+      // After all meetings are scheduled, reset the form
+      onReset(results.participants);
+      
     } catch (error) {
-      console.error("Error scheduling meeting:", error);
-      setSchedulingError(error instanceof Error ? error.message : 'An unknown error occurred');
+      setSchedulingError(error instanceof Error ? error.message : 'Failed to schedule meetings');
     } finally {
       setIsScheduling(false);
     }
@@ -290,11 +265,11 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
         </div>
         
         <div className="p-6 space-y-6">
-          {/* Scheduling form appears when a slot is selected */}
-          {selectedSlot && (
+          {/* Scheduling form appears when slots are selected */}
+          {selectedSlots.length > 0 && (
             <div className="p-4 border border-blue-800 bg-[#1e3a8a] bg-opacity-20 rounded-md">
               <h3 className="font-medium text-gray-200 mb-3">
-                Schedule Meeting for {format(parseISO(selectedSlot.start), 'MMMM d, yyyy')} at {format(parseISO(selectedSlot.start), 'h:mm a')}
+                Schedule {selectedSlots.length} Meeting{selectedSlots.length > 1 ? 's' : ''}
               </h3>
               
               <div className="mb-4">
@@ -306,7 +281,7 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
                   type="text" 
                   value={meetingName}
                   onChange={(e) => setMeetingName(e.target.value)}
-                  placeholder="Enter a name for your meeting"
+                  placeholder="Enter a name for your meetings"
                   className="w-full px-3 py-2 bg-[#25262b] border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-200 placeholder-gray-500"
                 />
               </div>
@@ -336,7 +311,7 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
                   disabled={isScheduling}
                   className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {isScheduling ? 'Scheduling...' : 'Schedule Meeting'}
+                  {isScheduling ? 'Scheduling...' : `Schedule ${selectedSlots.length} Meeting${selectedSlots.length > 1 ? 's' : ''}`}
                   {!isScheduling && (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -344,7 +319,7 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
                   )}
                 </button>
                 <button
-                  onClick={() => setSelectedSlot(null)}
+                  onClick={() => setSelectedSlots([])}
                   disabled={isScheduling}
                   className="py-2 px-4 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-[#25262b] hover:bg-[#2c2d32] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -359,7 +334,7 @@ const AvailabilityResults: React.FC<AvailabilityResultsProps> = ({ results, onRe
               <button
                 key={index}
                 className={`w-full text-left px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  selectedSlot && selectedSlot.start === slot.start 
+                  selectedSlots.some(s => s.start === slot.start)
                     ? 'border-blue-500 bg-blue-900 bg-opacity-20' 
                     : 'border-gray-600 bg-[#25262b] hover:bg-[#2c2d32]'
                 }`}
