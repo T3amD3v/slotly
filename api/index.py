@@ -29,6 +29,8 @@ from .calendar_utils import (
     filter_slots_by_duration,
     create_calendar_event,
     get_event_conference_details,
+    update_calendar_event,
+    delete_calendar_event,
 )
 
 ### Create FastAPI instance with custom docs and openapi url
@@ -62,60 +64,31 @@ These functions handle token extraction and validation
 
 async def get_session_token(request: Request) -> Dict[str, Any]:
     """
-    Extract session token from request cookies.
-    
-    This function:
-    1. Looks for the next-auth session token in cookies
-    2. Falls back to development version of cookie name if needed
-    3. Creates a token_info dictionary containing OAuth credentials
-    
-    Args:
-        request: FastAPI request object
-        
-    Returns:
-        Token information dictionary with access_token and client credentials
-    
-    Raises:
-        HTTPException: If token is missing or invalid
+    Get token info from session
     """
+    # Default values
+    token_info = {
+        'access_token': None,
+        'refresh_token': None,
+        'client_id': GOOGLE_CLIENT_ID,
+        'client_secret': GOOGLE_CLIENT_SECRET
+    }
+    
+    # Try to get session data
     try:
-        # Get the session token from cookies
-        cookie_name = "__Secure-next-auth.session-token"
-        if request.cookies.get(cookie_name) is None:
-            cookie_name = "next-auth.session-token"  # Fallback for development
-            
-        session_token = request.cookies.get(cookie_name)
-        if session_token is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
-            )
-            
-        # In a real implementation, we would decode and verify the JWT token
-        # For now, let's assume we can extract the access token from the session cookie
-        # This is a placeholder - in production, use a proper JWT library to decode
-        # the token and verify its signature
+        session_cookie = request.cookies.get('__Secure-next-auth.session-token') or request.cookies.get('next-auth.session-token')
         
-        # For now, use the client ID and secret from environment variables
-        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-            error_msg = "Missing Google OAuth credentials in environment variables"
-            raise ValueError(error_msg)
+        if not session_cookie:
+            return token_info
             
-        # Placeholder for token extraction from session
-        token_info = {
-            "access_token": session_token,  # This is incorrect - it should be extracted from the JWT payload
-            "refresh_token": None,  # Same here
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
-        }
+        # Use session data
+        # Implement decrypt logic here to get the token from session cookie
+        # For now, this will be handled by the frontend passing tokens
         
-        return token_info
     except Exception as e:
-        error_msg = f"Error processing authentication: {str(e)}"
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error_msg
-        )
+        print(f"Session access error: {str(e)}")
+        
+    return token_info
 
 
 def validate_email_domain(email: str) -> bool:
@@ -187,24 +160,13 @@ Main Scheduling Endpoint
 @app.post("/api/py/schedule", response_model=AvailabilityResponse)
 async def schedule(request: Request):
     """
-    Process a scheduling request to find availability or schedule a meeting.
+    Main scheduling endpoint that handles both finding availability and scheduling meetings.
     
-    This endpoint handles two main operations:
-    1. Finding available time slots for a group of participants
-    2. Scheduling a meeting at a specific time
+    This endpoint supports two modes:
+    1. Find Availability: Analyzes multiple calendars to find times when all participants are free
+    2. Schedule Meeting: Creates an actual calendar event at a specific time with all participants
     
-    The workflow:
-    - Extract authentication info from request cookies and body
-    - Validate email domains and authentication
-    - Generate working hours based on date range
-    - Find conflicts across all participants' calendars
-    - Either return available slots or create a meeting
-    
-    Args:
-        request: FastAPI request object
-        
-    Returns:
-        AvailabilityResponse with time slots or scheduled meeting details
+    The mode is determined by the meeting_type field in the request.
     """
     try:
         # Parse the request body manually
@@ -414,3 +376,171 @@ async def schedule(request: Request):
     except Exception as e:
         error_msg = f"Error processing schedule request: {str(e)}"
         return AvailabilityResponse(error=error_msg)
+
+@app.post("/api/py/events", response_model=Dict[str, Any])
+async def get_events(request: Request):
+    """
+    Get all events in a date range for the current user.
+    
+    This endpoint retrieves all events from the user's primary calendar
+    within the specified date range.
+    """
+    try:
+        # Parse the request body manually
+        raw_body = await request.body()
+        body_dict = json.loads(raw_body)
+        
+        # Extract auth info if present
+        auth_info = body_dict.get('auth', {})
+        
+        # Extract date range
+        date_range = body_dict.get('date_range', {})
+        # Safely extract and parse start and end dates
+        start_str = date_range.get('start')
+        end_str = date_range.get('end')
+        
+        # Check if strings exist before parsing
+        if not isinstance(start_str, str) or not isinstance(end_str, str):
+            return {"error": "Invalid date range format. Start and end dates must be ISO format strings"}
+            
+        try:
+            start_date = datetime.fromisoformat(start_str)
+            end_date = datetime.fromisoformat(end_str)
+        except ValueError as e:
+            return {"error": f"Invalid date format: {str(e)}"}
+        
+        # Get token info from session
+        token_info = await get_session_token(request)
+        
+        # Update token_info with auth info from request body
+        if auth_info:
+            if auth_info.get('accessToken'):
+                token_info['access_token'] = auth_info.get('accessToken')
+            
+            if auth_info.get('refreshToken'):
+                token_info['refresh_token'] = auth_info.get('refreshToken')
+        
+        # Create Google Calendar service
+        service = create_google_calendar_service(token_info)
+        
+        # Get events from user's primary calendar
+        events = get_calendar_events(
+            service=service,
+            calendar_id="primary",
+            time_min=start_date,
+            time_max=end_date
+        )
+        
+        # Return the events and include the date range for potential refreshes
+        return {
+            "events": events,
+            "date_range": {
+                "start": start_str,
+                "end": end_str
+            }
+        }
+    except Exception as e:
+        error_msg = f"Error retrieving events: {str(e)}"
+        return {"error": error_msg}
+
+
+@app.post("/api/py/events/{event_id}/update", response_model=Dict[str, Any])
+async def update_event(event_id: str, request: Request):
+    """
+    Update an existing event.
+    
+    This endpoint updates an event in the user's primary calendar
+    with the provided details.
+    """
+    try:
+        # Parse the request body manually
+        raw_body = await request.body()
+        body_dict = json.loads(raw_body)
+        
+        # Extract auth info if present
+        auth_info = body_dict.get('auth', {})
+        
+        # Extract event details
+        summary = body_dict.get('summary')
+        start_time = datetime.fromisoformat(body_dict.get('start_time'))
+        end_time = datetime.fromisoformat(body_dict.get('end_time'))
+        add_google_meet = body_dict.get('add_google_meet', False)
+        
+        # Get token info from session
+        token_info = await get_session_token(request)
+        
+        # Update token_info with auth info from request body
+        if auth_info:
+            if auth_info.get('accessToken'):
+                token_info['access_token'] = auth_info.get('accessToken')
+            
+            if auth_info.get('refreshToken'):
+                token_info['refresh_token'] = auth_info.get('refreshToken')
+        
+        # Check if we're in read-only mode
+        read_only_mode = not token_info.get('refresh_token')
+        if read_only_mode:
+            return {"error": "Cannot update events without a refresh token. Please re-authenticate with full permissions."}
+        
+        # Create Google Calendar service
+        service = create_google_calendar_service(token_info)
+        
+        # Update the event
+        updated_event = update_calendar_event(
+            service=service,
+            calendar_id="primary",
+            event_id=event_id,
+            summary=summary,
+            start_time=start_time,
+            end_time=end_time,
+            add_google_meet=add_google_meet
+        )
+        
+        # Return the updated event
+        return {"event": updated_event}
+    except Exception as e:
+        error_msg = f"Error updating event: {str(e)}"
+        return {"error": error_msg}
+
+
+@app.delete("/api/py/events/{event_id}", response_model=Dict[str, Any])
+async def delete_event(event_id: str, request: Request):
+    """
+    Delete an event.
+    
+    This endpoint deletes an event from the user's primary calendar.
+    """
+    try:
+        # Get token info from session
+        token_info = await get_session_token(request)
+        
+        # Try to get auth info from query parameters
+        auth_token = request.query_params.get('access_token')
+        refresh_token = request.query_params.get('refresh_token')
+        
+        if auth_token:
+            token_info['access_token'] = auth_token
+        
+        if refresh_token:
+            token_info['refresh_token'] = refresh_token
+        
+        # Check if we're in read-only mode
+        read_only_mode = not token_info.get('refresh_token')
+        if read_only_mode:
+            return {"error": "Cannot delete events without a refresh token. Please re-authenticate with full permissions."}
+        
+        # Create Google Calendar service
+        service = create_google_calendar_service(token_info)
+        
+        # Delete the event
+        success = delete_calendar_event(
+            service=service,
+            calendar_id="primary",
+            event_id=event_id
+        )
+        
+        # Return success
+        return {"success": success}
+    except Exception as e:
+        error_msg = f"Error deleting event: {str(e)}"
+        return {"error": error_msg}

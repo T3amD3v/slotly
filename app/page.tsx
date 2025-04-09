@@ -8,6 +8,10 @@ import Link from "next/link";
 import SchedulingForm from "./components/SchedulingForm";
 // @ts-ignore
 import AvailabilityResults from "./components/AvailabilityResults";
+// @ts-ignore
+import EventManagementForm from "./components/EventManagementForm";
+// @ts-ignore
+import EventsResults from "./components/EventsResults";
 import { useRouter } from "next/navigation";
 
 /**
@@ -41,8 +45,12 @@ export default function Home() {
   const { data: session, status } = useSession();
   // State for storing availability results returned from API
   const [availabilityResults, setAvailabilityResults] = useState<any>(null);
+  // State for storing events results returned from API
+  const [eventsResults, setEventsResults] = useState<any>(null);
   // State for storing participants between form submissions
   const [savedParticipants, setSavedParticipants] = useState<string[]>([]);
+  // State for toggling between Find Availability and Manage Events views
+  const [activeView, setActiveView] = useState<'find_availability' | 'manage_events'>('find_availability');
   const router = useRouter();
 
   /**
@@ -136,7 +144,7 @@ export default function Home() {
    * 
    * @param formData - Form data containing scheduling information
    */
-  const handleFormSubmit = async (formData: FormData) => {
+  const handleSchedulingFormSubmit = async (formData: FormData) => {
     try {
       // Save the participants for later use
       setSavedParticipants(formData.participants);
@@ -179,6 +187,51 @@ export default function Home() {
   };
 
   /**
+   * Handles form submission for getting events
+   * 1. Gets date range data from form
+   * 2. Adds auth tokens from session
+   * 3. Submits to API
+   * 4. Updates state with results
+   * 
+   * @param formData - Form data containing date range information
+   */
+  const handleEventsFormSubmit = async (formData: any) => {
+    try {
+      // Add authentication info from session
+      const authData = {
+        ...formData,
+        auth: {
+          accessToken: session?.accessToken,
+          refreshToken: session?.refreshToken,
+        }
+      };
+      
+      const response = await fetch("/api/py/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(authData),
+        credentials: 'include', // Include cookies
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to process request: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      setEventsResults(data);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      setEventsResults({
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
    * Main UI for authenticated users
    * Shows either:
    * 1. Availability results if a search was performed
@@ -210,25 +263,96 @@ export default function Home() {
           </div>
         </div>
 
-        {availabilityResults ? (
-          <div>
-            <AvailabilityResults 
-              results={availabilityResults} 
-              onReset={(participants) => {
-                // If participants are passed, update the saved participants
-                if (participants) {
-                  setSavedParticipants(participants);
-                }
+        {/* View Toggle */}
+        <div className="mb-6 flex justify-center">
+          <div className="bg-[#1a1b1e] rounded-lg p-1 inline-flex">
+            <button
+              onClick={() => {
+                setActiveView('find_availability');
                 setAvailabilityResults(null);
+                setEventsResults(null);
               }}
-            />
+              className={`px-4 py-2 text-sm rounded-md ${
+                activeView === 'find_availability'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-300 hover:bg-[#25262b]'
+              }`}
+            >
+              Find Availability
+            </button>
+            <button
+              onClick={() => {
+                setActiveView('manage_events');
+                setAvailabilityResults(null);
+                setEventsResults(null);
+              }}
+              className={`px-4 py-2 text-sm rounded-md ${
+                activeView === 'manage_events'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-300 hover:bg-[#25262b]'
+              }`}
+            >
+              Manage Events
+            </button>
           </div>
-        ) : (
+        </div>
+
+        {/* Find Availability View */}
+        {activeView === 'find_availability' && (
           <div>
-            <SchedulingForm 
-              onSubmit={handleFormSubmit} 
-              initialParticipants={savedParticipants}
-            />
+            {availabilityResults ? (
+              <AvailabilityResults 
+                results={availabilityResults} 
+                onReset={(participants) => {
+                  // If participants are passed, update the saved participants
+                  if (participants) {
+                    setSavedParticipants(participants);
+                  }
+                  setAvailabilityResults(null);
+                }}
+              />
+            ) : (
+              <SchedulingForm 
+                onSubmit={handleSchedulingFormSubmit} 
+                initialParticipants={savedParticipants}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Manage Events View */}
+        {activeView === 'manage_events' && (
+          <div>
+            {eventsResults ? (
+              <EventsResults 
+                results={eventsResults} 
+                onReset={() => setEventsResults(null)}
+                onRefresh={() => {
+                  // Ensure we have a valid date range for refresh
+                  const dateRange = eventsResults.date_range || 
+                    (eventsResults.events && eventsResults.events[0]?.start?.dateTime ? 
+                      // If date_range is missing but we have events, extract from first event
+                      {
+                        start: eventsResults.events[0].start.dateTime,
+                        end: eventsResults.events[eventsResults.events.length-1].end.dateTime
+                      } : 
+                      // Fallback to current date range if no events
+                      {
+                        start: new Date().toISOString(),
+                        end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                      }
+                    );
+                    
+                  handleEventsFormSubmit({
+                    date_range: dateRange
+                  });
+                }}
+              />
+            ) : (
+              <EventManagementForm 
+                onSubmit={handleEventsFormSubmit} 
+              />
+            )}
           </div>
         )}
       </div>

@@ -519,4 +519,90 @@ def get_event_conference_details(service: Any, calendar_id: str, event_id: str) 
         }
     except Exception as e:
         error_details = str(e)
-        return {'error': error_details} 
+        return {'error': error_details}
+
+
+def update_calendar_event(service: Any, calendar_id: str, event_id: str,
+                         summary: str, start_time: datetime, end_time: datetime,
+                         add_google_meet: bool = False) -> Dict[str, Any]:
+    """
+    Update an existing calendar event.
+    
+    Updates an event in Google Calendar with the specified details.
+    Can optionally add Google Meet video conferencing to the event.
+    
+    Args:
+        service: Google Calendar API service
+        calendar_id: ID of the calendar containing the event (usually 'primary')
+        event_id: ID of the event to update
+        summary: New event summary/title
+        start_time: New event start time
+        end_time: New event end time
+        add_google_meet: Whether to add Google Meet conferencing data
+        
+    Returns:
+        Updated event data from Google Calendar API
+    """
+    try:
+        # First retrieve the event
+        event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+        
+        # Update the event properties
+        event['summary'] = summary
+        event['start'] = {
+            'dateTime': start_time.isoformat(),
+            'timeZone': 'UTC',
+        }
+        event['end'] = {
+            'dateTime': end_time.isoformat(),
+            'timeZone': 'UTC',
+        }
+        
+        # Add or update Google Meet if requested
+        if add_google_meet and not event.get('conferenceData'):
+            event['conferenceData'] = {
+                'createRequest': {
+                    'requestId': str(uuid.uuid4()),
+                    'conferenceSolutionKey': {'type': 'hangoutsMeet'},
+                }
+            }
+            
+        # Update the event
+        updated_event = service.events().update(
+            calendarId=calendar_id,
+            eventId=event_id,
+            body=event,
+            conferenceDataVersion=1 if add_google_meet else 0,
+            sendUpdates='all'  # Send notifications about the update
+        ).execute()
+        
+        return updated_event
+    except Exception as e:
+        # Re-raise the exception for other errors
+        raise
+
+
+def delete_calendar_event(service: Any, calendar_id: str, event_id: str) -> bool:
+    """
+    Delete a calendar event.
+    
+    Removes an event from Google Calendar.
+    
+    Args:
+        service: Google Calendar API service
+        calendar_id: ID of the calendar containing the event (usually 'primary')
+        event_id: ID of the event to delete
+        
+    Returns:
+        True if deletion was successful
+    """
+    try:
+        service.events().delete(
+            calendarId=calendar_id,
+            eventId=event_id,
+            sendUpdates='all'  # Send notifications about the deletion
+        ).execute()
+        return True
+    except Exception as e:
+        # Re-raise the exception for other errors
+        raise 
